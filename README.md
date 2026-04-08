@@ -2,8 +2,6 @@
 
 Official assignment at [Google Doc](https://docs.google.com/document/d/1AXgLXux3l69vDAPLL-UYD3luFOw3JbyR-pLCS2yuNZk/edit?usp=sharing)
 
-
-
 ## Getting started
 
 Before starting to implement your own code, make sure to:
@@ -32,6 +30,14 @@ You can also run the code on [Google Colab](https://colab.research.google.com/)
 NOTE 1: rendering is currently **not** officially supported on Colab, making it hard to see the simulator in action. We recommend that each group manages to play around with the visual interface of the simulator at least once, to best understand what is going on with the underlying Hopper environment.
 
 NOTE 2: you need to stay connected to the Google Colab interface at all times for your python scripts to keep training.
+
+## 3. Extra step for Push task
+To train on the panda-gym task you have to follow these steps first:
+
+```bash
+cd phase2/panda-gym
+pip install -e .
+```
 
 ## Project structure
 

@@ -9,18 +9,21 @@
     What is an action here?
 """
 import gymnasium as gym
-
+import panda_gym # type: ignore[import-not-found]
 def main():
     render = False
 
-    if render:
-        env = gym.make('Hopper-v4', render_mode='human')
-    else:
-        env = gym.make('Hopper-v4', render_mode='rgb_array')
+    env = gym.make(
+        "PandaPush-v3",
+        render_mode="human" if render else "rgb_array",
+        type="target",
+        reward_type="dense",
+    )
+    
     print('State space:', env.observation_space)  # state-space
     print('Action space:', env.action_space)  # action-space
 
-    n_episodes = 50
+    n_episodes = 5
 
     for ep in range(n_episodes):  
         done = False
