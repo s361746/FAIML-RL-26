@@ -36,36 +36,32 @@ NOTE 2: you need to stay connected to the Google Colab interface at all times fo
 ## Project structure
 
 ```
-faiml_rl/
+FAIML-RL-26/
 ├── readme.md
-├── phase1/
+├── phase1/ <-- about Hopper
 │   ├── agent.py
 │   ├── requirements.txt
 │   ├── test_random_policy.py
 │   ├── train.py
 │   └── colab_template/
 │       └── test_random_policy.ipynb
-└── phase2/
+└── phase2/ <-- about PushTask
     ├── eval_sb3.py
-    ├── rand_wrapper.py -- randomization wrapper for UDR/ADR
+    ├── rand_wrapper.py <-- randomization wrapper for UDR/ADR
     ├── train_sb3.py
     └── panda-gym/
-        ├── panda_gym/ (main package)
-        │   ├── __init__.py
-        │   ├── pybullet.py
-        │   ├── utils.py
-        │   ├── version.txt
-        │   ├── assets/
-        │   └── envs/
-        │       ├── core.py
-        │       ├── panda_tasks.py
-        │       ├── robots/
-        │       │   └── panda.py
-        │       └── tasks/
-        │           ├── flip.py
-        │           ├── pick_and_place.py
-        │           ├── push.py -- you will use this environment
-        │           ├── reach.py
-        │           ├── slide.py
-        │           └── stack.py
+        └── panda_gym/ (main package)
+            └── envs/
+                ├── core.py
+                ├── panda_tasks.py
+                ├── robots/
+                │   └── panda.py
+                └── tasks/
+                    ├── flip.py
+                    ├── pick_and_place.py
+                    ├── push.py <-- you will use this environment
+                    ├── reach.py
+                    ├── slide.py
+                    └── stack.py
+        
 ```
