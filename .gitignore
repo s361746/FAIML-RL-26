@@ -1,0 +1,7 @@
+# ignora commit di file ipynb cosi siamo 
+# tranquilli e ognuno lavora sul proprio
+# notebook jupyter senza paura di committare
+# roba e fare conflitti
+
+*.ipynb
+.ipynb_checkpoints/
