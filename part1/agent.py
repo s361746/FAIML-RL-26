@@ -76,7 +76,7 @@ class Agent(object):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
-
+        self.baseline = 20.0
         self.gamma = 0.99
         self.states = []
         self.next_states = []
@@ -94,12 +94,16 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
 
-        #
         # TASK 2:
-        #   - compute discounted returns
+        #   - compute discounted 
+        returns = discount_rewards(rewards, self.gamma)
         #   - compute policy gradient loss function given actions and returns
+        advantages = returns - self.baseline
+        policy_loss = -(action_log_probs * advantages).sum()
         #   - compute gradients and step the optimizer
-        #
+        self.optimizer.zero_grad()
+        policy_loss.backward()
+        self.optimizer.step()
 
 
         #
