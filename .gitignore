@@ -1,7 +1,10 @@
-# ignora commit di file ipynb cosi siamo 
-# tranquilli e ognuno lavora sul proprio
-# notebook jupyter senza paura di committare
-# roba e fare conflitti
+# ignora commit di file ipynb 
 
 *.ipynb
 .ipynb_checkpoints/
+
+# ho aggiunto anche la cartella sandbox che ognuno può usare 
+# per fare esperimenti su script invisibili a git
+
+sandbox/*
+!sandbox/.gitkeep
