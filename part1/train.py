@@ -6,6 +6,7 @@ import gymnasium as gym
 import numpy as np
 import time
 from agent import Policy, Agent
+from agent2 import Policy2, Agent2
 
 def main():
     env = gym.make('Hopper-v5')
@@ -17,8 +18,8 @@ def main():
     print('Action space:', env.action_space)  # action-space
 
     #TODO: implement training loop for REINFORCE and Actor-Critic using the agent defined in agent.py
-    policy = Policy(state_space=state_dim, action_space=action_dim)
-    agent = Agent(policy=policy, device='cpu')
+    policy = Policy2(state_space=state_dim, action_space=action_dim)
+    agent = Agent2(policy=policy, device='cpu')
 
     n_episodes = 5000
 
@@ -54,7 +55,7 @@ def main():
     for i in range(2000):
         action, _ = agent.get_action(state, evaluation=True)
         action_numpy = action.detach().cpu().numpy()
-        
+
         state, reward, terminated, truncated, _ = render_env.step(action_numpy)
         test_reward += reward
         time.sleep(0.1)
