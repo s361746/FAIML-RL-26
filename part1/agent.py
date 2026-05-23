@@ -14,10 +14,11 @@ def discount_rewards(r, gamma):
 
 
 class Policy(torch.nn.Module):
-    def __init__(self, state_space, action_space):
+    def __init__(self, state_space, action_space, mode="actor_critic"):
         super().__init__()
         self.state_space = state_space
         self.action_space = action_space
+        self.mode = mode
         self.hidden = 64
         self.tanh = torch.nn.Tanh()
 
@@ -38,7 +39,10 @@ class Policy(torch.nn.Module):
             Critic network
         """
         # TASK 3: critic network for actor-critic algorithm
-
+        if self.mode == "actor_critic":
+            self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
+            self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
+            self.fc3_critic_mean = torch.nn.Linear(self.hidden, 1)
 
         self.init_weights()
 
@@ -46,7 +50,7 @@ class Policy(torch.nn.Module):
     def init_weights(self):
         for m in self.modules():
             if type(m) is torch.nn.Linear:
-                torch.nn.init.normal_(m.weight)
+                torch.nn.init.xavier_normal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
 
 
@@ -66,9 +70,15 @@ class Policy(torch.nn.Module):
             Critic
         """
         # TASK 3: forward in the critic network
-
+        if self.mode == "actor_critic":
+            x_critic = self.tanh(self.fc1_critic(x))
+            x_critic = self.tanh(self.fc2_critic(x_critic))
+            critic_value = self.fc3_critic_mean(x_critic)
         
-        return normal_dist
+        if self.mode == "reinforce":
+            return normal_dist, None
+        else:
+            return normal_dist, critic_value
 
 
 class Agent(object):
@@ -76,7 +86,8 @@ class Agent(object):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
-        self.baseline = 20.0
+        if self.policy.mode == "reinforce":
+            self.baseline = 20.0
         self.gamma = 0.99
         self.states = []
         self.next_states = []
@@ -94,25 +105,35 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
 
-        # TASK 2:
-        #   - compute discounted 
-        returns = discount_rewards(rewards, self.gamma)
-        #   - compute policy gradient loss function given actions and returns
-        advantages = returns - self.baseline
-        policy_loss = -(action_log_probs * advantages).sum()
-        #   - compute gradients and step the optimizer
-        self.optimizer.zero_grad()
-        policy_loss.backward()
-        self.optimizer.step()
-
-
-        #
-        # TASK 3:
+        
+        if self.policy.mode == "reinforce":     # TASK 2:
+            #   - compute discounted 
+            returns = discount_rewards(rewards, self.gamma)
+            #   - compute policy gradient loss function given actions and returns
+            advantages = returns - self.baseline
+            policy_loss = -(action_log_probs * advantages).mean()
+            #   - compute gradients and step the optimizer
+            self.optimizer.zero_grad()
+            policy_loss.backward()
+            self.optimizer.step()
+        else:   # TASK 3:
         #   - compute boostrapped discounted return estimates
-        #   - compute advantage terms
-        #   - compute actor loss and critic loss
-        #   - compute gradients and step the optimizer
-        #
+            _, values = self.policy(states)
+            values = values.squeeze(-1)
+            _, next_values = self.policy(next_states)
+            next_values = next_values.squeeze(-1).detach()
+
+            targets = rewards + self.gamma * next_values.detach() * (1 - done)
+            #   - compute advantage terms
+            advantages = targets - values.detach() 
+            #   - compute actor loss and critic loss
+            critic_loss = F.mse_loss(values, targets)
+            actor_loss = -(action_log_probs * advantages).mean()
+            loss = actor_loss + critic_loss
+            #   - compute gradients and step the optimizer
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
         return        
 
@@ -121,7 +142,7 @@ class Agent(object):
         """ state -> action (3-d), action_log_densities """
         x = torch.from_numpy(state).float().to(self.train_device)
 
-        normal_dist = self.policy(x)
+        normal_dist, _ = self.policy(x)
 
         if evaluation:  # Return mean
             return normal_dist.mean, None

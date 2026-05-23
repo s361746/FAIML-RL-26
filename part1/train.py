@@ -6,9 +6,9 @@ import gymnasium as gym
 import numpy as np
 import time
 from agent import Policy, Agent
-from agent2 import Policy2, Agent2
 
 def main():
+    
     env = gym.make('Hopper-v5')
 
     state_dim = env.observation_space.shape[0]
@@ -18,10 +18,10 @@ def main():
     print('Action space:', env.action_space)  # action-space
 
     #TODO: implement training loop for REINFORCE and Actor-Critic using the agent defined in agent.py
-    policy = Policy2(state_space=state_dim, action_space=action_dim)
-    agent = Agent2(policy=policy, device='cpu')
+    policy = Policy(state_space=state_dim, action_space=action_dim, mode=select_algorithm_mode())
+    agent = Agent(policy=policy, device='cpu')
 
-    n_episodes = 5000
+    n_episodes = 1000
 
     for episode in range(n_episodes):
         state, info = env.reset()
@@ -64,6 +64,24 @@ def main():
     render_env.close()
 
     env.close()
+
+def select_algorithm_mode():
+    print("="*40)
+    print("  SELEZIONE MODALITÀ DI ADDESTRAMENTO")
+    print("="*40)
+    print("1. REINFORCE (Task 2)")
+    print("2. Actor-Critic (Task 3)")
+    print("="*40)
+    
+    while True:
+        scelta = input("Inserisci il numero della modalità desiderata (1 o 2): ").strip()
+        
+        if scelta == "1":
+            return "reinforce"
+        elif scelta == "2":
+            return "actor_critic"
+        else:
+            print("Scelta non valida! Per favore, inserisci '1' per REINFORCE o '2' per Actor-Critic.\n")
 
 if __name__ == '__main__':
     main()
