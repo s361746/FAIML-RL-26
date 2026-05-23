@@ -8,3 +8,7 @@
 
 sandbox/*
 !sandbox/.gitkeep
+
+// ignora commit di file di configurazione e di cache
+*.pyc
+*.json
