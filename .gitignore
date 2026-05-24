@@ -9,6 +9,10 @@
 sandbox/*
 !sandbox/.gitkeep
 
-// ignora commit di file di configurazione e di cache
+# ignora commit di file di configurazione e di cache
 *.pyc
 *.json
+
+#ignora cartella video
+videos/
+*.mp4

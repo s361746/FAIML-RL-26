@@ -85,7 +85,7 @@ class Agent(object):
     def __init__(self, policy, device='cpu'):
         self.train_device = device
         self.policy = policy.to(self.train_device)
-        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(policy.parameters(), lr=3e-4)
         if self.policy.mode == "reinforce":
             self.baseline = 20.0
         self.gamma = 0.99
@@ -118,7 +118,7 @@ class Agent(object):
             self.optimizer.step()
         else:   # TASK 3:
         #   - compute boostrapped discounted return estimates
-            _, values = self.policy(states)
+            normal_dist, values = self.policy(states)
             values = values.squeeze(-1)
             _, next_values = self.policy(next_states)
             next_values = next_values.squeeze(-1).detach()
@@ -129,10 +129,18 @@ class Agent(object):
             #   - compute actor loss and critic loss
             critic_loss = F.mse_loss(values, targets)
             actor_loss = -(action_log_probs * advantages).mean()
-            loss = actor_loss + critic_loss
+
+            # --- L'ENTROPIA ---
+            entropy = normal_dist.entropy().mean()
+
+            loss = actor_loss + 0.5 * critic_loss - 0.02 * entropy
             #   - compute gradients and step the optimizer
             self.optimizer.zero_grad()
             loss.backward()
+
+            # Optional: clip gradients to avoid exploding gradients in continuous control tasks
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
+
             self.optimizer.step()
 
         return        
