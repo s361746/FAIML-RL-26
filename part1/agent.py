@@ -4,16 +4,12 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 
 
-def discount_rewards(r, gamma):
-    discounted_r = torch.zeros_like(r)
-    running_add = 0
-    for t in reversed(range(0, r.size(-1))):
-        running_add = running_add * gamma + r[t]
-        discounted_r[t] = running_add
-    return discounted_r
-
-
 class Policy(torch.nn.Module):
+    
+    """
+    Network constructor.
+    Initializes the architecture of the Actor and the Critic.
+    """
     def __init__(self, state_space, action_space, mode="actor_critic"):
         super().__init__()
         self.state_space = state_space
@@ -22,9 +18,7 @@ class Policy(torch.nn.Module):
         self.hidden = 64
         self.tanh = torch.nn.Tanh()
 
-        """
-            Actor network
-        """
+        # Actor network
         self.fc1_actor = torch.nn.Linear(state_space, self.hidden)
         self.fc2_actor = torch.nn.Linear(self.hidden, self.hidden)
         self.fc3_actor_mean = torch.nn.Linear(self.hidden, action_space)
@@ -32,13 +26,9 @@ class Policy(torch.nn.Module):
         # Learned standard deviation for exploration at training time 
         self.sigma_activation = F.softplus
         init_sigma = 0.5
-        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
+        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space) + init_sigma)
 
-
-        """
-            Critic network
-        """
-        # TASK 3: critic network for actor-critic algorithm
+        # Critic network
         if self.mode == "actor_critic":
             self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
             self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
@@ -46,18 +36,23 @@ class Policy(torch.nn.Module):
 
         self.init_weights()
 
-
+    """
+    Initializes the weights of all linear modules in the network using 
+    the Xavier normal distribution and sets the biases to zero.
+    Helps prevent vanishing/exploding gradient problems at the start of training.
+    """
     def init_weights(self):
         for m in self.modules():
             if type(m) is torch.nn.Linear:
                 torch.nn.init.xavier_normal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
 
-
+    """
+    Executes the forward pass of the neural network.
+    """
     def forward(self, x):
-        """
-            Actor
-        """
+
+        # Actor
         x_actor = self.tanh(self.fc1_actor(x))
         x_actor = self.tanh(self.fc2_actor(x_actor))
         action_mean = self.fc3_actor_mean(x_actor)
@@ -65,11 +60,7 @@ class Policy(torch.nn.Module):
         sigma = self.sigma_activation(self.sigma)
         normal_dist = Normal(action_mean, sigma)
 
-
-        """
-            Critic
-        """
-        # TASK 3: forward in the critic network
+        # Critic
         if self.mode == "actor_critic":
             x_critic = self.tanh(self.fc1_critic(x))
             x_critic = self.tanh(self.fc2_critic(x_critic))
@@ -82,12 +73,19 @@ class Policy(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, policy, device='cpu'):
+
+    """
+    Initializes the RL Agent.
+    """
+    def __init__(self, policy, device='cpu', baseline=None):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=3e-4)
+        
+        # Configure baseline for REINFORCE
         if self.policy.mode == "reinforce":
-            self.baseline = 20.0
+            self.baseline = baseline if baseline is not None else 0
+            
         self.gamma = 0.99
         self.states = []
         self.next_states = []
@@ -95,7 +93,10 @@ class Agent(object):
         self.rewards = []
         self.done = []
 
-
+    """
+    Processes collected episode data, calculates losses, 
+    and updates the policy network parameters via gradient descent.
+    """
     def update_policy(self):
         action_log_probs = torch.stack(self.action_log_probs, dim=0).to(self.train_device).squeeze(-1)
         states = torch.stack(self.states, dim=0).to(self.train_device).squeeze(-1)
@@ -105,69 +106,85 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
 
-        
-        if self.policy.mode == "reinforce":     # TASK 2:
-            #   - compute discounted 
-            returns = discount_rewards(rewards, self.gamma)
-            #   - compute policy gradient loss function given actions and returns
+        if self.policy.mode == "reinforce":     
+            # TASK 2:
+            # Compute discounted returns
+            returns = self._discount_rewards(rewards, self.gamma)
+            
+            # Compute policy gradient loss function given actions and returns
             advantages = returns - self.baseline
             policy_loss = -(action_log_probs * advantages).mean()
-            #   - compute gradients and step the optimizer
+            
+            # Compute gradients and step the optimizer
             self.optimizer.zero_grad()
             policy_loss.backward()
             self.optimizer.step()
-        else:   # TASK 3:
-        #   - compute boostrapped discounted return estimates
+        else:
+            # TASK 3:
+            # Compute bootstrapped discounted return estimates
             normal_dist, values = self.policy(states)
             values = values.squeeze(-1)
             _, next_values = self.policy(next_states)
             next_values = next_values.squeeze(-1).detach()
-
             targets = rewards + self.gamma * next_values.detach() * (1 - done)
-            #   - compute advantage terms
+            
+            # Compute advantage terms
             advantages = targets - values.detach() 
-            #   - compute actor loss and critic loss
+            
+            # Compute actor loss and critic loss
             critic_loss = F.mse_loss(values, targets)
             actor_loss = -(action_log_probs * advantages).mean()
 
-            # --- L'ENTROPIA ---
+            # Compute the mean entropy of the distribution to monitor or encourage exploration
             entropy = normal_dist.entropy().mean()
-
             loss = actor_loss + 0.5 * critic_loss - 0.02 * entropy
-            #   - compute gradients and step the optimizer
+            
+            # Compute gradients and step the optimizer
             self.optimizer.zero_grad()
             loss.backward()
 
-            # Optional: clip gradients to avoid exploding gradients in continuous control tasks
+            # Clip gradients to avoid exploding gradients in continuous control tasks
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
-
+            
             self.optimizer.step()
 
-        return        
+        return    
+    
+    """
+    Calculates the cumulative discounted returns for each timestep 
+    of an episode, working backwards from the final step to the first.
+    """
+    @staticmethod
+    def _discount_rewards(r, gamma):
+        discounted_r = torch.zeros_like(r)
+        running_add = 0
+        for t in reversed(range(0, r.size(-1))):
+            running_add = running_add * gamma + r[t]
+            discounted_r[t] = running_add
+        return discounted_r    
 
-
+    """
+    Determines the appropriate action vector given the current environment state.
+    """
     def get_action(self, state, evaluation=False):
-        """ state -> action (3-d), action_log_densities """
         x = torch.from_numpy(state).float().to(self.train_device)
 
         normal_dist, _ = self.policy(x)
 
         if evaluation:  # Return mean
             return normal_dist.mean, None
-
         else:   # Sample from the distribution
             action = normal_dist.sample()
-
-            # Compute Log probability of the action [ log(p(a[0] AND a[1] AND a[2])) = log(p(a[0])*p(a[1])*p(a[2])) = log(p(a[0])) + log(p(a[1])) + log(p(a[2])) ]
             action_log_prob = normal_dist.log_prob(action).sum()
 
             return action, action_log_prob
-
-
+    
+    """
+    Saves a single step transition into the agent's short-term memory buffer.
+    """
     def store_outcome(self, state, next_state, action_log_prob, reward, done):
         self.states.append(torch.from_numpy(state).float())
         self.next_states.append(torch.from_numpy(next_state).float())
         self.action_log_probs.append(action_log_prob)
         self.rewards.append(torch.Tensor([reward]))
         self.done.append(done)
-

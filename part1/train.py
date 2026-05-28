@@ -1,4 +1,3 @@
-
 import gymnasium as gym
 import numpy as np
 import time
@@ -9,98 +8,114 @@ from gymnasium.wrappers import RecordVideo
 import matplotlib.pyplot as plt
 
 def main():
-    
+    # -------------------------------------------------------------------------
+    # 1. Setup
+    # -------------------------------------------------------------------------
     env = gym.make('Hopper-v5')
 
+    # Extract state and action space dimensionalities
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
+    print('State space:', env.observation_space)
+    print('Action space:', env.action_space)
 
-    print('State space:', env.observation_space)  # state-space
-    print('Action space:', env.action_space)  # action-space
-
-    #TODO: implement training loop for REINFORCE and Actor-Critic using the agent defined in agent.py
-    policy = Policy(state_space=state_dim, action_space=action_dim, mode=select_algorithm_mode())
-    agent = Agent(policy=policy, device='cpu')
+    # Choose the configuration
+    mode, baseline = select_algorithm_mode()
+    policy = Policy(state_space=state_dim, action_space=action_dim, mode=mode)
+    agent = Agent(policy=policy, device='cpu', baseline=baseline)
 
     n_episodes = 1000
     tot_steps = 0
-
-    # --- NUOVE LISTE PER I GRAFICI ---
-    history_total_rewards = []
-    history_episode_lengths = []
-    history_forward_rewards = []
-    history_survive_rewards = []
-    history_ctrl_rewards = []
-
     best_reward = -float('inf')
 
+    training_start_time = time.time()
+    # Lists of performances for plotting
+    history_total_rewards = []
+    history_forward_rewards = []
+    history_survive_rewards = []
+    history_episode_lengths = []
+    history_episode_times = []
+    history_cumulative_times = []
+    
+    # -------------------------------------------------------------------------
+    # 2. Training Loop
+    # -------------------------------------------------------------------------
     for episode in range(n_episodes):
+        episode_start_time = time.time()
         state, _ = env.reset()
         done = False
         episode_reward = 0
-        
         n_steps = 0
 
-        # Variabili temporanee per questo singolo episodio
+        # Metrics variables for this episode
         ep_reward = 0
         ep_steps = 0
         ep_forward = 0
         ep_survive = 0
-        ep_ctrl = 0
 
         while not done:
-            
+            # Get action from the policy
             action, action_log_prob = agent.get_action(state, evaluation=False)
             action_numpy = action.detach().cpu().numpy()
 
+            # Take a step in the environment
             new_state, reward, terminated, truncated, info = env.step(action_numpy)
             done = terminated or truncated
 
-            # --- ESTRAZIONE DATI PER I GRAFICI ---
+            # Track total rewards and environment metrics
             ep_reward += reward
             ep_steps += 1
-            # info.get() evita errori se per caso la chiave non esiste in versioni vecchie
             ep_forward += info.get('reward_forward', 0)
             ep_survive += info.get('reward_survive', 0)
-            ep_ctrl += info.get('reward_ctrl', 0)
 
             agent.store_outcome(state, new_state, action_log_prob, reward, done)
 
+            # Update current state and step counters
             state = new_state
             episode_reward += reward
             n_steps += 1
 
-        # Se questo episodio ha battuto il record, salviamo il cervello del robot!
-        if ep_reward > best_reward:
-            best_reward = ep_reward
-            # Salviamo lo stato della rete neurale in un file
-            torch.save(agent.policy.state_dict(), "videos/best_hopper_policy.pth")
-            # print(f"[*] Nuovo Record! Salvato modello con {best_reward:.2f} punti.")
-
+        # Episode concluded (trigger gradient updates)
         agent.update_policy()
+
+        # Compute execution durations
+        episode_end_time = time.time()
+        episode_duration = episode_end_time - episode_start_time
+        cumulative_duration = episode_end_time - training_start_time
 
         tot_steps += n_steps
 
-        # ALLA FINE DELL'EPISODIO: Salviamo i totali nelle liste globali
+        # Save episode metrics to history for visualization
         history_total_rewards.append(ep_reward)
         history_episode_lengths.append(ep_steps)
         history_forward_rewards.append(ep_forward)
         history_survive_rewards.append(ep_survive)
-        history_ctrl_rewards.append(ep_ctrl)
+        history_episode_times.append(episode_duration)
+        history_cumulative_times.append(cumulative_duration)
 
+        # Save model weights if agent sets a performance record
+        if ep_reward > best_reward:
+            best_reward = ep_reward
+            torch.save(agent.policy.state_dict(), "videos/best_hopper_policy.pth")
+
+        # Print training progress every 100 episodes
         if (episode + 1) % 100 == 0:
-            print(f"Episode {episode + 1}/{n_episodes} | Total Reward: {episode_reward:.2f} | current steps: {tot_steps}")
+            avg_reward_100 = np.mean(history_total_rewards[-100:])
+            avg_time_100 = np.mean(history_episode_times[-100:])
+            print(f"Episode {episode + 1}/{n_episodes} | "
+                  f"Avg Reward (Last 100): {avg_reward_100:.2f} | "
+                  f"Avg Time/Ep: {avg_time_100:.3f}s | "
+                  f"Total steps: {tot_steps}")
 
-    print(f"\nTraining finished! Caricamento del modello migliore (Record: {best_reward:.2f})...")
-    # Carichiamo i pesi del record assoluto!
+    # -------------------------------------------------------------------------
+    # 3. Video Rendering
+    # -------------------------------------------------------------------------
+    print(f"\nTraining finished! Loading best model (Record: {best_reward:.2f})...")
     agent.policy.load_state_dict(torch.load("videos/best_hopper_policy.pth"))
     
-    # 1. Creiamo l'ambiente base
+    # Set up environment and record the video file
     base_env = gym.make('Hopper-v5', render_mode='rgb_array')
-    # ... (il resto del tuo codice per il video) ...
     test_reward = 0
-
-    # 2. Registrazione video SENZA il blocco 'with' (molto più sicuro per forzare il salvataggio)
     render_env = RecordVideo(base_env, video_folder='videos', name_prefix='hopper_test_run', episode_trigger=lambda x: True)
         
     state, info = render_env.reset()
@@ -114,25 +129,21 @@ def main():
         done = terminated or truncated
         test_reward += reward
 
-    # 3. Chiusura ESPLICITA degli ambienti. Questo dice a ffmpeg: "Salva l'MP4 ORA!"
+    # Close environments and save the file
     render_env.close()
     base_env.close()
     env.close()
 
     print(f"Final Test Run Reward: {test_reward:.2f}")
-    print("Video salvato con successo! Controlla la cartella 'videos'.")
+    print("Video saved successfully! Check the 'videos' folder.")
+    print("Generating performance and temporal analysis charts...")
 
-    # --- INIZIO SEZIONE GRAFICI ---
-    def moving_average(data, window_size=50):
-        if len(data) < window_size:
-            return data
-        return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
+    # -------------------------------------------------------------------------
+    # 4. Data Visualization
+    # -------------------------------------------------------------------------
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 14))
 
-    print("Generazione dei grafici in corso...")
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
-
-    # GRAFICO 1: Reward Totale e Sopravvivenza
+    # Plot 1: Total reward and episode length
     ax1.plot(moving_average(history_total_rewards), label='Total Reward', color='blue')
     ax1.set_ylabel('Reward', color='blue')
     ax1.tick_params(axis='y', labelcolor='blue')
@@ -141,43 +152,64 @@ def main():
     ax1_2.plot(moving_average(history_episode_lengths), label='Episode Length', color='red', alpha=0.4)
     ax1_2.set_ylabel('Steps (Max 1000)', color='red')
     ax1_2.tick_params(axis='y', labelcolor='red')
-    ax1.set_title('Curva di Apprendimento (Media Mobile 50 ep)')
+    ax1.set_title('Learning Curve (Moving Average 50 ep)')
 
-    # GRAFICO 2: Scomposizione del Reward
+    # Plot 2: Reward breakdown (Survive vs. Forward)
     ax2.plot(moving_average(history_survive_rewards), label='Survive Bonus', color='green', linewidth=2)
     ax2.plot(moving_average(history_forward_rewards), label='Forward Bonus', color='purple', linewidth=2)
-    ax2.plot(moving_average(history_ctrl_rewards), label='Control Cost', color='orange', linewidth=2)
-    ax2.set_title('Analisi della Strategia: Da dove arrivano i punti?')
-    ax2.set_xlabel('Episodi')
-    ax2.set_ylabel('Punti')
+    ax2.set_title('Strategy Analysis: Reward Distribution')
+    ax2.set_ylabel('Points')
     ax2.legend()
 
+    # Plot 3: Computation time analysis
+    ax3.plot(moving_average(history_episode_times), label='Time per Episode (Right)', color='brown', linestyle='--')
+    ax3.set_ylabel('Seconds / Episode', color='brown')
+    ax3.tick_params(axis='y', labelcolor='brown')
+
+    ax3_2 = ax3.twinx()
+    ax3_2.plot(history_cumulative_times, label='Total Cumulative Time (Left)', color='black', alpha=0.7)
+    ax3_2.set_ylabel('Total Compute Time (Seconds)', color='black')
+    ax3_2.tick_params(axis='y', labelcolor='black')
+    ax3.set_title('Computational Resource Consumption Profile')
+    ax3.set_xlabel('Episodes')
+
     plt.tight_layout()
-    # Salva l'immagine
     plt.savefig('videos/hopper_training_analysis.png')
-    
-    # RIMOSSO plt.show() - In questo modo lo script si chiude da solo e rilascia tutte le risorse!
-    print("Grafici salvati in 'videos/hopper_training_analysis.png'. Esecuzione completata!")
+    print("Charts saved to 'videos/hopper_training_analysis.png'. Execution complete!")
 
 
-
+"""
+Displays an interactive terminal menu allowing selection between 
+REINFORCE (with or without baseline variations) and Actor-Critic.
+"""
 def select_algorithm_mode():
     print("="*40)
-    print("  SELEZIONE MODALITÀ DI ADDESTRAMENTO")
+    print("       TRAINING MODE SELECTION")
     print("="*40)
-    print("1. REINFORCE (Task 2)")
-    print("2. Actor-Critic (Task 3)")
+    print("1. REINFORCE with 0.0 Baseline (Vanilla)")
+    print("2. REINFORCE with 20.0 Baseline")
+    print("3. Actor-Critic")
     print("="*40)
     
     while True:
-        scelta = input("Inserisci il numero della modalità desiderata (1 o 2): ").strip()
+        scelta = input("Enter the choice number (1, 2, or 3): ").strip()
         
         if scelta == "1":
-            return "reinforce"
+            return "reinforce", 0.0
         elif scelta == "2":
-            return "actor_critic"
+            return "reinforce", 20.0
+        elif scelta == "3":
+            return "actor_critic", None
         else:
-            print("Scelta non valida! Per favore, inserisci '1' per REINFORCE o '2' per Actor-Critic.\n")
+            print("Invalid choice! Please insert '1' for REINFORCE (0 baseline), '2' for REINFORCE (20 baseline), or '3' for Actor-Critic.\n")
 
+"""
+Calculates the moving average of a 1D array or list using linear convolution.
+"""
+def moving_average(data, window_size=50):
+    if len(data) < window_size:
+        return data
+    return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
+    
 if __name__ == '__main__':
     main()
