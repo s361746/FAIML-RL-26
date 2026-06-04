@@ -11,12 +11,12 @@
 import gymnasium as gym
 import panda_gym # type: ignore[import-not-found]
 def main():
-    render = False
+    render = True
 
     env = gym.make(
         "PandaPush-v3",
         render_mode="human" if render else "rgb_array",
-        type="target",
+        #type="target",
         reward_type="dense",
     )
     

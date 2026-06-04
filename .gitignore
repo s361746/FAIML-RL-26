@@ -16,3 +16,6 @@ sandbox/*
 #ignora cartella video
 videos/
 *.mp4
+
+# ignora file di checkpoint e modelli salvati
+*.zip

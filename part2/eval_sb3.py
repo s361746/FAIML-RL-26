@@ -3,20 +3,35 @@ import os
 
 import gymnasium as gym
 import numpy as np
-#from stable_baselines3 import 
-import panda_gym  # noqa: F401 - required so Panda envs are registered
+from stable_baselines3 import PPO, SAC
+import panda_gym
 
+from rand_wrapper import RandomizationWrapper
+
+
+def load_model(model_path: str):
+    model_name = os.path.splitext(os.path.basename(model_path))[0].lower()
+    algorithm = model_name.split("_")[0]
+
+    if algorithm == "ppo":
+        return PPO.load(model_path)
+    if algorithm == "sac":
+        return SAC.load(model_path)
+    
 
 def evaluate(model_path: str, n_episodes: int, deterministic: bool, render: bool, env_type: str) -> None:
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"Model file not found: {model_path}. "
-            "Make sure you saved your trained model with model.save(...)."
-        )
+    if not os.path.exists(model_path): 
+        raise FileNotFoundError(f"Model file not found: {model_path}")
 
     render_mode = "human" if render else "rgb_array"
-    env = gym.make("PandaPush-v3", render_mode=render_mode, type=env_type, reward_type="dense")
-    #TODO: load model here
+    env = gym.make(
+        "PandaPush-v3",
+        render_mode=render_mode,
+        reward_type="dense",
+    )
+    env = RandomizationWrapper(env, env_type=env_type, mode="none")
+    
+    model = load_model(model_path)
 
     episode_returns = []
     successes = []
@@ -28,7 +43,7 @@ def evaluate(model_path: str, n_episodes: int, deterministic: bool, render: bool
         episode_return = 0.0
 
         while not (terminated or truncated):
-            action,_ = ... #TODO: get action from the model
+            action, _ = model.predict(obs, deterministic=deterministic)
             obs, reward, terminated, truncated, info = env.step(action)
             episode_return += float(reward)
 

@@ -3,13 +3,20 @@ from collections import deque
 
 import gymnasium as gym
 import numpy as np
-import panda_gym  # type: ignore[import-not-found]
-from stable_baselines3 import DDPG
+import panda_gym
+from stable_baselines3 import PPO, SAC
 from rand_wrapper import RandomizationWrapper
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train SAC on PandaPush-v3")
+    parser.add_argument(
+        "--algo",
+        type=str,
+        default="sac",
+        choices=["ppo", "sac"],
+        help="Algorithm to use for training (PPO or SAC)",
+    )
     parser.add_argument(
         "--sampling-strategy",
         type=str,
@@ -32,21 +39,35 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-
 def main() -> None:
     args = parse_args()
+    algo, strategy, env_type, timesteps = args.algo, args.sampling_strategy, args.env_type, args.timesteps  
 
     env = gym.make(
         "PandaPush-v3",
         render_mode="rgb_array",
-        type=args.env_type,
         reward_type="dense",
     )
 
-    #TODO: add randomization wrapper here
-    #TODO: create model and train it
-    save_name = f"sac_push_{args.sampling_strategy}_{args.env_type}_{args.timesteps // 1000}k"
-    # TODO: model.save(save_name)
+    # Wrap the environment using the RandomizationWrapper.
+    env = RandomizationWrapper(env, env_type=env_type, mode=strategy)
+
+    # Initialize the chosen algorithm model
+    if algo.lower() == "ppo":
+        # Use MultiInputPolicy because Panda-Gym outputs dictionary observation spaces
+        model = PPO("MultiInputPolicy", env, verbose=1)
+    elif algo.lower() == "sac":
+        model = SAC("MultiInputPolicy", env, verbose=1)
+
+    # Train the agent
+    print(f"Starting training for {algo.upper()} over {timesteps} timesteps...")
+    model.learn(total_timesteps=timesteps)
+    env.close()
+
+    # Save the trained model
+    save_name = f"{algo}_{strategy}_{env_type}_{timesteps // 1000}k"
+    model.save(save_name)
+    print(f"Model saved successfully as: {save_name}")
 
 
 if __name__ == "__main__":
