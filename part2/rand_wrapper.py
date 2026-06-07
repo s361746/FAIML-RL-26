@@ -9,8 +9,8 @@ class RandomizationWrapper(gym.Wrapper):
 
     SUPPORTED_MODES = {"none", "udr", "adr"}
     DOMAIN_MASS_RANGES = {
-        "source": (0.5, 1.5),  # UDR will train the robot on blocks between 0.5kg and 1.5kg
-        "target": (2.0, 2.0),  # The messy real-world target is a heavy 2.0kg block
+        "source": (1.0, 1.0),
+        "target": (5.0, 5.0),
     }
 
     def __init__(
@@ -30,16 +30,23 @@ class RandomizationWrapper(gym.Wrapper):
         else:
             self.mass_min_limit, self.mass_max_limit = mass_range
 
-        self.mass_min = self.mass_min_limit
-        self.mass_max = self.mass_max_limit
+        # Start from tight bounds for ADR, we will expand/contract dynamically
+        if self.mode == "adr":
+            self.mass_min = 1.0
+            self.mass_max = 1.0
+        else:
+            self.mass_min = self.mass_min_limit
+            self.mass_max = self.mass_max_limit
+
         self.current_mass = None
         self.last_sample_type = "fixed"
 
-        self.episode_reward = 0.0
-        self.episode_count = 0
-        self.reward_history = []
-        self.adr_adjustment = 0.03
-
+        self.episode_successes = []
+        self.window_size = 20         # Finestra di episodi per stabilizzare la metrica
+        self.adr_adjustment = 0.05
+        
+        self.thr_high = 0.80          # If the agent's success rate is > 80%, expand the range
+        self.thr_low = 0.40           # If the agent's success rate is < 40%, contract the range
 
     def _sample_mass(self):
         if self.mode == "none":
@@ -58,39 +65,41 @@ class RandomizationWrapper(gym.Wrapper):
 
         raise ValueError(f"Unsupported sampling mode '{self.mode}'.")
 
-    def _update_adr_bounds(self):
-        if self.mode != "adr" or len(self.reward_history) < 2:
+    def _update_adr_bounds(self, is_success):
+        if self.mode != "adr":
             return
 
-        previous_reward = self.reward_history[-2]
-        latest_reward = self.reward_history[-1]
-        span = self.mass_max_limit - self.mass_min_limit
-        adjustment = max(1e-4, self.adr_adjustment * span)
+        self.episode_successes.append(is_success)
+        
+        # Only update bounds once enough data has accumulated in the window
+        if len(self.episode_successes) >= self.window_size:
+            avg_success = np.mean(self.episode_successes)
+            self.episode_successes.clear()
 
-        if latest_reward >= previous_reward:
-            self.mass_min = max(self.mass_min_limit, self.mass_min - adjustment)
-            self.mass_max = min(self.mass_max_limit, self.mass_max + adjustment)
-            self.last_sample_type = "expanded"
-        else:
-            self.mass_min = min(self.mass_max, self.mass_min + adjustment)
-            self.mass_max = max(self.mass_min, self.mass_max - adjustment)
-            self.last_sample_type = "contracted"
+            span = self.mass_max_limit - self.mass_min_limit
+            adjustment = max(1e-4, self.adr_adjustment * span)
 
-        self.mass_min = float(np.clip(self.mass_min, self.mass_min_limit, self.mass_max_limit))
-        self.mass_max = float(np.clip(self.mass_max, self.mass_min, self.mass_max_limit))
+            if avg_success >= self.thr_high:
+                self.mass_min = max(self.mass_min_limit, self.mass_min - adjustment)
+                self.mass_max = min(self.mass_max_limit, self.mass_max + adjustment)
+                self.last_sample_type = "expanded"
+            elif avg_success < self.thr_low:
+                self.mass_min = min(self.mass_max, self.mass_min + adjustment)
+                self.mass_max = max(self.mass_min, self.mass_max - adjustment)
+                self.last_sample_type = "contracted"
+            else:
+                self.last_sample_type = "maintained"
 
+            self.mass_min = float(np.clip(self.mass_min, self.mass_min_limit, self.mass_max_limit))
+            self.mass_max = float(np.clip(self.mass_max, self.mass_min, self.mass_max_limit))
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
-
-        self.episode_reward += float(reward)
         done = terminated or truncated
 
-        if done:
-            self.episode_count += 1
-            self.reward_history.append(self.episode_reward)
-            self._update_adr_bounds()
-            self.episode_reward = 0.0
+        if done and self.mode == "adr":
+            is_success = float(info.get("is_success", 0.0))
+            self._update_adr_bounds(is_success)
 
         return obs, reward, terminated, truncated, info
 
@@ -106,12 +115,6 @@ class RandomizationWrapper(gym.Wrapper):
                 bodyUniqueId=object_body_id,
                 linkIndex=-1,
                 mass=float(new_mass),
-            )
-
-            print(
-                f"[{self.env_type}:{self.mode}] mass={new_mass:.2f} "
-                f"range=[{self.mass_min:.2f},{self.mass_max:.2f}] "
-                f"type={self.last_sample_type}"
             )
 
         observation, info = super().reset(**kwargs)

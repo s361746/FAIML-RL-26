@@ -1,15 +1,13 @@
 import argparse
-from collections import deque
-
 import gymnasium as gym
-import numpy as np
 import panda_gym
 from stable_baselines3 import PPO, SAC
+from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 from rand_wrapper import RandomizationWrapper
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train SAC on PandaPush-v3")
+    parser = argparse.ArgumentParser(description="Train SAC/PPO on PandaPush-v3")
     parser.add_argument(
         "--algo",
         type=str,
@@ -37,7 +35,14 @@ def parse_args() -> argparse.Namespace:
         default=500_000,
         help="Number of training timesteps",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility",
+    )
     return parser.parse_args()
+
 
 def main() -> None:
     args = parse_args()
@@ -45,19 +50,60 @@ def main() -> None:
 
     env = gym.make(
         "PandaPush-v3",
-        render_mode="rgb_array",
-        reward_type="dense",
+        reward_type="sparse",
     )
 
-    # Wrap the environment using the RandomizationWrapper.
-    env = RandomizationWrapper(env, env_type=env_type, mode=strategy)
+    env = gym.make(
+        "PandaPush-v3",
+        reward_type="sparse",
+    )
 
-    # Initialize the chosen algorithm model
+    env = RandomizationWrapper(
+        env, 
+        env_type=env_type,
+        mass_range=(1.0, 5.0), 
+        mode=strategy
+    )
+    
+    env.reset(seed=args.seed)
+
     if algo.lower() == "ppo":
-        # Use MultiInputPolicy because Panda-Gym outputs dictionary observation spaces
-        model = PPO("MultiInputPolicy", env, ent_coef=0.05, batch_size=2048, verbose=1)
+        model = PPO(
+            "MultiInputPolicy", 
+            env, 
+            ent_coef=0.05, 
+            batch_size=2048, 
+            gamma=0.95,
+            seed=args.seed,
+            verbose=1
+        )
     elif algo.lower() == "sac":
-        model = SAC("MultiInputPolicy", env, verbose=1)
+        replay_buffer_class = HerReplayBuffer
+        replay_buffer_kwargs = dict(
+            n_sampled_goal=4,
+            goal_selection_strategy="future",
+        )
+
+        policy_kwargs = dict(
+            net_arch=[256, 256, 256]
+        )
+
+        model = SAC(
+            "MultiInputPolicy",
+            env,
+            learning_rate=1e-3,
+            batch_size=2048,
+            gamma=0.95,
+            tau=0.05,
+            train_freq=64,
+            gradient_steps=64,
+            learning_starts=10_000,
+            replay_buffer_class=replay_buffer_class,
+            replay_buffer_kwargs=replay_buffer_kwargs,
+            policy_kwargs=policy_kwargs,
+            seed=args.seed,
+            verbose=0,
+        )
 
     # Train the agent
     print(f"Starting training for {algo.upper()} over {timesteps} timesteps...")
@@ -65,7 +111,7 @@ def main() -> None:
     env.close()
 
     # Save the trained model
-    save_name = f"{algo}+ent_coef_{strategy}_{env_type}_{timesteps // 1000}k"
+    save_name = f"{algo}_{strategy}_{env_type}_{timesteps // 1000}k"
     model.save(save_name)
     print(f"Model saved successfully as: {save_name}")
 
