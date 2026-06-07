@@ -53,11 +53,6 @@ def main() -> None:
         reward_type="sparse",
     )
 
-    env = gym.make(
-        "PandaPush-v3",
-        reward_type="sparse",
-    )
-
     env = RandomizationWrapper(
         env, 
         env_type=env_type,
