@@ -9,8 +9,8 @@ class RandomizationWrapper(gym.Wrapper):
 
     SUPPORTED_MODES = {"none", "udr", "adr"}
     DOMAIN_MASS_RANGES = {
-        "source": (1.0, 1.0),
-        "target": (1.5, 2.5),
+        "source": (0.5, 1.5),  # UDR will train the robot on blocks between 0.5kg and 1.5kg
+        "target": (2.0, 2.0),  # The messy real-world target is a heavy 2.0kg block
     }
 
     def __init__(

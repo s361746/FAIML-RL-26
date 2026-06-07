@@ -5,18 +5,20 @@ import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO, SAC
 import panda_gym
+import time
 
 from rand_wrapper import RandomizationWrapper
 
 
 def load_model(model_path: str):
     model_name = os.path.splitext(os.path.basename(model_path))[0].lower()
-    algorithm = model_name.split("_")[0]
 
-    if algorithm == "ppo":
+    if "ppo" in model_name:
         return PPO.load(model_path)
-    if algorithm == "sac":
+    if "sac" in model_name:
         return SAC.load(model_path)
+        
+    raise ValueError(f"Could not determine algorithm from filename: {model_name}")
     
 
 def evaluate(model_path: str, n_episodes: int, deterministic: bool, render: bool, env_type: str) -> None:
@@ -46,6 +48,8 @@ def evaluate(model_path: str, n_episodes: int, deterministic: bool, render: bool
             action, _ = model.predict(obs, deterministic=deterministic)
             obs, reward, terminated, truncated, info = env.step(action)
             episode_return += float(reward)
+            if render:
+                time.sleep(0.03)
 
         episode_returns.append(episode_return)
 
@@ -67,6 +71,8 @@ def evaluate(model_path: str, n_episodes: int, deterministic: bool, render: bool
     if successes:
         success_rate = float(np.mean(successes))
         print(f"Success rate: {success_rate:.2%}")
+    
+    print(successes)
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,9 +86,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--episodes", 
         type=int, 
-        default=500, 
+        default=50, 
         help="Number of eval episodes"
     )
+    # not use stochastic in eval
     parser.add_argument(
         "--stochastic",
         action="store_true",

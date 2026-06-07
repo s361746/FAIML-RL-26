@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--algo",
         type=str,
-        default="sac",
+        default="ppo",
         choices=["ppo", "sac"],
         help="Algorithm to use for training (PPO or SAC)",
     )
@@ -55,7 +55,7 @@ def main() -> None:
     # Initialize the chosen algorithm model
     if algo.lower() == "ppo":
         # Use MultiInputPolicy because Panda-Gym outputs dictionary observation spaces
-        model = PPO("MultiInputPolicy", env, verbose=1)
+        model = PPO("MultiInputPolicy", env, ent_coef=0.05, batch_size=2048, verbose=1)
     elif algo.lower() == "sac":
         model = SAC("MultiInputPolicy", env, verbose=1)
 
@@ -65,7 +65,7 @@ def main() -> None:
     env.close()
 
     # Save the trained model
-    save_name = f"{algo}_{strategy}_{env_type}_{timesteps // 1000}k"
+    save_name = f"{algo}+ent_coef_{strategy}_{env_type}_{timesteps // 1000}k"
     model.save(save_name)
     print(f"Model saved successfully as: {save_name}")
 
