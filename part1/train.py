@@ -1,3 +1,4 @@
+import argparse
 import gymnasium as gym
 import numpy as np
 import time
@@ -7,7 +8,35 @@ from agent import Policy, Agent
 from gymnasium.wrappers import RecordVideo
 import matplotlib.pyplot as plt
 
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train policy on Hopper environment")
+    parser.add_argument(
+        "--episodes",
+        type=int,
+        default=1000,
+        help="Number of training episodes",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="reinforce",
+        choices=["reinforce", "actor_critic"],
+        help="Training algorithm mode",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=float,
+        default=0.0,
+        help="Baseline value for REINFORCE (only used with --mode reinforce)",
+    )
+    return parser.parse_args()
+
+
 def main():
+    # Parse command-line arguments
+    args = parse_args()
+
     # -------------------------------------------------------------------------
     # 1. Setup
     # -------------------------------------------------------------------------
@@ -19,12 +48,12 @@ def main():
     print('State space:', env.observation_space)
     print('Action space:', env.action_space)
 
-    # Choose the configuration
-    mode, baseline = select_algorithm_mode()
+    # Choose the configuration from arguments
+    mode, baseline = args.mode, args.baseline
     policy = Policy(state_space=state_dim, action_space=action_dim, mode=mode)
     agent = Agent(policy=policy, device='cpu', baseline=baseline)
 
-    n_episodes = 1000
+    n_episodes = args.episodes
     tot_steps = 0
     best_reward = -float('inf')
 
@@ -177,31 +206,6 @@ def main():
     plt.savefig('videos/hopper_training_analysis.png')
     print("Charts saved to 'videos/hopper_training_analysis.png'. Execution complete!")
 
-
-"""
-Displays an interactive terminal menu allowing selection between 
-REINFORCE (with or without baseline variations) and Actor-Critic.
-"""
-def select_algorithm_mode():
-    print("="*40)
-    print("       TRAINING MODE SELECTION")
-    print("="*40)
-    print("1. REINFORCE with 0.0 Baseline (Vanilla)")
-    print("2. REINFORCE with 20.0 Baseline")
-    print("3. Actor-Critic")
-    print("="*40)
-    
-    while True:
-        scelta = input("Enter the choice number (1, 2, or 3): ").strip()
-        
-        if scelta == "1":
-            return "reinforce", 0.0
-        elif scelta == "2":
-            return "reinforce", 20.0
-        elif scelta == "3":
-            return "actor_critic", None
-        else:
-            print("Invalid choice! Please insert '1' for REINFORCE (0 baseline), '2' for REINFORCE (20 baseline), or '3' for Actor-Critic.\n")
 
 """
 Calculates the moving average of a 1D array or list using linear convolution.
