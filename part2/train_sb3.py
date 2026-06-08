@@ -32,12 +32,11 @@ def main() -> None:
     log_dir = f"./logs/{algo}_{strategy}_{env_type}"
     os.makedirs(log_dir, exist_ok=True)
 
-
     if algo.lower() == "ppo":
         
         def make_env():
             e = gym.make("PandaPush-v3", reward_type="dense")
-            e = RandomizationWrapper(e, env_type=env_type, mass_range=(1.0, 5.0), mode=strategy)
+            e = RandomizationWrapper(e, env_type=env_type, mode=strategy)
             e.reset(seed=args.seed)
             return Monitor(e)
             
@@ -62,7 +61,7 @@ def main() -> None:
     elif algo.lower() == "sac":
         
         env = gym.make("PandaPush-v3", reward_type="sparse")
-        env = RandomizationWrapper(env, env_type=env_type, mass_range=(1.0, 5.0), mode=strategy)
+        env = RandomizationWrapper(env, env_type=env_type, mode=strategy)
         env = Monitor(env) 
         env.reset(seed=args.seed)
 
@@ -96,7 +95,7 @@ def main() -> None:
     if algo.lower() == "ppo":
         def make_eval_env():
             e = gym.make("PandaPush-v3", reward_type="dense")
-            e = RandomizationWrapper(e, env_type=env_type, mass_range=(1.0, 5.0), mode=strategy)
+            e = RandomizationWrapper(e, env_type=env_type, mode=strategy)
             return Monitor(e)
         eval_env = DummyVecEnv([make_eval_env])
         
@@ -104,7 +103,7 @@ def main() -> None:
     else:
         
         eval_env_base = gym.make("PandaPush-v3", reward_type="sparse")
-        eval_env_base = RandomizationWrapper(eval_env_base, env_type=env_type, mass_range=(1.0, 5.0), mode=strategy)
+        eval_env_base = RandomizationWrapper(eval_env_base, env_type=env_type, mode=strategy)
         eval_env = Monitor(eval_env_base)
 
     eval_callback = EvalCallback(
