@@ -1,4 +1,5 @@
 import argparse
+import time
 import gymnasium as gym
 import panda_gym
 from stable_baselines3 import PPO, SAC
@@ -102,9 +103,19 @@ def main() -> None:
 
     # Train the agent
     print(f"Starting training for {algo.upper()} over {timesteps} timesteps...")
+    start_time = time.time() 
     model.learn(total_timesteps=timesteps)
+    end_time = time.time()  
     env.close()
 
+    elapsed_time = end_time - start_time
+    hours = int(elapsed_time // 3600)
+    minutes = int((elapsed_time % 3600) // 60)
+    seconds = int(elapsed_time % 60)
+    print("\n" + "="*40)
+    print(f"Training completed in: {hours}h {minutes}m {seconds}s ({elapsed_time:.2f} total seconds)")
+    print("="*40 + "\n")
+    
     # Save the trained model
     save_name = f"{algo}_{strategy}_{env_type}_{timesteps // 1000}k"
     model.save(save_name)
