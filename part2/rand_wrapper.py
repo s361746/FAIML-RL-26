@@ -1,4 +1,3 @@
-
 import numpy as np
 import gymnasium as gym
 
@@ -9,7 +8,7 @@ class RandomizationWrapper(gym.Wrapper):
 
     SUPPORTED_MODES = {"none", "udr", "adr"}
     DOMAIN_MASS_RANGES = {
-        "source": (1.0, 1.0),
+        "source": (1.0, 9.0),
         "target": (5.0, 5.0),
     }
 
@@ -30,7 +29,7 @@ class RandomizationWrapper(gym.Wrapper):
         else:
             self.mass_min_limit, self.mass_max_limit = mass_range
 
-        # Start from tight bounds for ADR, we will expand/contract dynamically
+        # Start from tight bounds for ADR, expand dynamically
         if self.mode == "adr":
             self.mass_min = 1.0
             self.mass_max = 1.0
@@ -42,18 +41,16 @@ class RandomizationWrapper(gym.Wrapper):
         self.last_sample_type = "fixed"
 
         self.episode_successes = []
-        self.window_size = 20         # Finestra di episodi per stabilizzare la metrica
+        self.window_size = 20         
         self.adr_adjustment = 0.05
         
-        self.thr_high = 0.80          # If the agent's success rate is > 80%, expand the range
-        self.thr_low = 0.40           # If the agent's success rate is < 40%, contract the range
+        self.thr_high = 0.80           
+        self.thr_low = 0.40           
 
     def _sample_mass(self):
         if self.mode == "none":
             self.last_sample_type = "fixed"
-            if self.mass_min_limit == self.mass_max_limit:
-                return float(self.mass_min_limit)
-            return float((self.mass_min_limit + self.mass_max_limit) / 2.0)
+            return float(self.mass_min_limit)  # Baseline source is 1.0kg, target eval is 5.0kg
 
         if self.mode == "udr":
             self.last_sample_type = "uniform"
@@ -71,7 +68,6 @@ class RandomizationWrapper(gym.Wrapper):
 
         self.episode_successes.append(is_success)
         
-        # Only update bounds once enough data has accumulated in the window
         if len(self.episode_successes) >= self.window_size:
             avg_success = np.mean(self.episode_successes)
             self.episode_successes.clear()
@@ -115,6 +111,12 @@ class RandomizationWrapper(gym.Wrapper):
                 bodyUniqueId=object_body_id,
                 linkIndex=-1,
                 mass=float(new_mass),
+            )
+
+            print(
+                f"[{self.env_type}:{self.mode}] mass={new_mass:.2f} "
+                f"range=[{self.mass_min:.2f},{self.mass_max:.2f}] "
+                f"type={self.last_sample_type}"
             )
 
         observation, info = super().reset(**kwargs)
