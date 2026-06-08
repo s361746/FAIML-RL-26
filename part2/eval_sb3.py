@@ -26,11 +26,14 @@ def evaluate(model_path: str, n_episodes: int, render: bool, env_type: str) -> N
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     render_mode = "human" if render else "rgb_array"
+    reward_type = "sparse" if "sac" in model_path.lower() else "dense"
+
     env = gym.make(
         "PandaPush-v3",
-        render_mode=render_mode,
-        reward_type="dense",
+        reward_type=reward_type,
+        render_mode=render_mode
     )
+
     env = RandomizationWrapper(env, env_type=env_type, mode="none")
     
     model = load_model(model_path, env=env)

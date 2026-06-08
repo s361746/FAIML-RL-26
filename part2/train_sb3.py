@@ -49,6 +49,13 @@ def main() -> None:
     args = parse_args()
     algo, strategy, env_type, timesteps = args.algo, args.sampling_strategy, args.env_type, args.timesteps  
 
+    reward_type = "sparse" if algo.lower() == "sac" else "dense"
+
+    env = gym.make(
+        "PandaPush-v3",
+        reward_type=reward_type,
+    )
+    
     env = gym.make(
         "PandaPush-v3",
         reward_type="sparse",
@@ -57,7 +64,6 @@ def main() -> None:
     env = RandomizationWrapper(
         env, 
         env_type=env_type,
-        mass_range=(1.0, 5.0), 
         mode=strategy
     )
     
