@@ -112,10 +112,8 @@ def main() -> None:
     hours = int(elapsed_time // 3600)
     minutes = int((elapsed_time % 3600) // 60)
     seconds = int(elapsed_time % 60)
-    print("\n" + "="*40)
-    print(f"Training completed in: {hours}h {minutes}m {seconds}s ({elapsed_time:.2f} total seconds)")
-    print("="*40 + "\n")
-    
+    print(f"\nTraining completed in: {hours}h {minutes}m {seconds}s ({elapsed_time:.2f} total seconds)\n")
+
     # Save the trained model
     save_name = f"{algo}_{strategy}_{env_type}_{timesteps // 1000}k"
     model.save(save_name)
