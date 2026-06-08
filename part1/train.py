@@ -9,6 +9,9 @@ from gymnasium.wrappers import RecordVideo
 import matplotlib.pyplot as plt
 
 
+"""
+Parses command-line arguments for the model training script
+"""
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train policy on Hopper environment")
     parser.add_argument(
@@ -33,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+"""
+Main training, evaluation, and visualization pipeline for the Hopper-v5 environment
+"""
 def main():
     # Parse command-line arguments
     args = parse_args()
