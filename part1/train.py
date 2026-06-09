@@ -142,6 +142,12 @@ def main():
                   f"Avg Time/Ep: {avg_time_100:.3f}s | "
                   f"Total steps: {tot_steps}")
 
+    # After the training loop ends
+    final_returns = np.array(history_total_rewards)
+    print(f"\n--- EXPERIMENT RESULTS ---")
+    print(f"Mean Return: {final_returns.mean():.2f}")
+    print(f"Std Return: {final_returns.std():.2f}")
+    print(f"Total Compute Time: {history_cumulative_times[-1]:.2f} seconds")
     # -------------------------------------------------------------------------
     # 3. Video Rendering
     # -------------------------------------------------------------------------
