@@ -2,10 +2,12 @@ import argparse
 import gymnasium as gym
 import numpy as np
 import time
+import random
 
 import torch
 from agent import Policy, Agent
 from gymnasium.wrappers import RecordVideo
+
 import matplotlib.pyplot as plt
 
 
@@ -17,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--episodes",
         type=int,
-        default=1000,
+        default=10000,
         help="Number of training episodes",
     )
     parser.add_argument(
@@ -33,6 +35,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Baseline value for REINFORCE (only used with --mode reinforce)",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed"
+    )
     return parser.parse_args()
 
 
@@ -42,6 +50,10 @@ Main training, evaluation, and visualization pipeline for the Hopper-v5 environm
 def main():
     # Parse command-line arguments
     args = parse_args()
+    
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
     # -------------------------------------------------------------------------
     # 1. Setup
@@ -72,6 +84,8 @@ def main():
     history_episode_times = []
     history_cumulative_times = []
     
+    N_STEPS_HORIZON = 20
+
     # -------------------------------------------------------------------------
     # 2. Training Loop
     # -------------------------------------------------------------------------
@@ -79,7 +93,6 @@ def main():
         episode_start_time = time.time()
         state, _ = env.reset()
         done = False
-        episode_reward = 0
         n_steps = 0
 
         # Metrics variables for this episode
@@ -105,13 +118,16 @@ def main():
 
             agent.store_outcome(state, new_state, action_log_prob, reward, done)
 
-            # Update current state and step counters
+            # N-STEP UPDATE: Update the network every N steps or if the episode terminates
+            if mode == "actor_critic" and (ep_steps % N_STEPS_HORIZON == 0 or done):
+                agent.update_policy()
+
             state = new_state
-            episode_reward += reward
             n_steps += 1
 
-        # Episode concluded (trigger gradient updates)
-        agent.update_policy()
+        # REINFORCE only updates at the end of a complete episode
+        if mode == "reinforce":
+            agent.update_policy()
 
         # Compute execution durations
         episode_end_time = time.time()

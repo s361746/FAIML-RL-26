@@ -94,8 +94,8 @@ class Agent(object):
         self.done = []
 
     """
-    Processes collected episode data, calculates losses, 
-    and updates the policy network parameters via gradient descent.
+    Processes collected data, calculates losses, 
+    and updates the policy network parameters.
     """
     def update_policy(self):
         action_log_probs = torch.stack(self.action_log_probs, dim=0).to(self.train_device).squeeze(-1)
@@ -126,16 +126,24 @@ class Agent(object):
             values = values.squeeze(-1)
             _, next_values = self.policy(next_states)
             next_values = next_values.squeeze(-1).detach()
-            targets = rewards + self.gamma * next_values.detach() * (1 - done)
             
-            # Compute advantage terms
+            # N-step backward algorithm to compute correct targets, if the state is terminal, the bootstrap value is 0 
+            targets = torch.zeros_like(rewards)
+            running_return = 0.0 if done[-1] else next_values[-1]
+            
+            for t in reversed(range(len(rewards))):
+                if done[t]:
+                    running_return = 0.0
+                running_return = rewards[t] + self.gamma * running_return
+                targets[t] = running_return
+                
             advantages = targets - values.detach() 
             
             # Compute actor loss and critic loss
             critic_loss = F.mse_loss(values, targets)
             actor_loss = -(action_log_probs * advantages).mean()
 
-            # Compute the mean entropy of the distribution to monitor or encourage exploration
+            # Compute the mean entropy of the distribution
             entropy = normal_dist.entropy().mean()
             loss = actor_loss + 0.5 * critic_loss - 0.02 * entropy
             
@@ -145,14 +153,13 @@ class Agent(object):
 
             # Clip gradients to avoid exploding gradients in continuous control tasks
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
-            
             self.optimizer.step()
 
         return    
     
     """
     Calculates the cumulative discounted returns for each timestep 
-    of an episode, working backwards from the final step to the first.
+    of an episode
     """
     @staticmethod
     def _discount_rewards(r, gamma):
