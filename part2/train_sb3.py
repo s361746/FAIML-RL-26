@@ -22,8 +22,8 @@ def parse_args() -> argparse.Namespace:
         "--algo", 
         type=str, 
         default="ppo", 
-        choices=["ppo", "sac"], 
-        help="Algorithm to use for training (PPO or SAC)",
+        choices=["ppo", "sac", "sacher"], 
+        help="Algorithm to use for training (PPO or SAC or SAC+HER)",
     )
     parser.add_argument(
         "--sampling-strategy", 
@@ -58,6 +58,9 @@ def parse_args() -> argparse.Namespace:
 Main execution pipeline to train a RL model
 """
 def main() -> None:
+
+    torch.set_num_threads(1)  # Speeds up traingng while protecting pc
+
     # Parse command-line arguments
     args = parse_args()
     algo, strategy, env_type, timesteps = args.algo, args.sampling_strategy, args.env_type, args.timesteps  
@@ -96,34 +99,48 @@ def main() -> None:
             verbose=0                   # Verbosity level        
         )
 
-    elif algo.lower() == "sac":
+    elif algo.lower() in ["sac", "sacher"]:
+
+        reward_type = "sparse" if algo.lower() == "sacher" else "dense"
         
         # Initialize environment with sparse rewards for off-policy validation        
         env = make_vec_env(
             "PandaPush-v3",
             seed=args.seed,
-            env_kwargs={"reward_type": "sparse"},
+            env_kwargs={"reward_type": reward_type},
             wrapper_class=lambda e: RandomizationWrapper(e, env_type=env_type, mode=strategy)
         )
+        
+        policy_kwargs = dict(net_arch=[256, 256, 256])
 
-        # Configure HER memory settings
-        replay_buffer_class = HerReplayBuffer
-        replay_buffer_kwargs = dict(
+        if algo.lower() == "sacher": 
+            # Configure HER memory settings
+            replay_buffer_class = HerReplayBuffer
+            replay_buffer_kwargs = dict(
             n_sampled_goal=4,
             goal_selection_strategy="future",
-        )
-        policy_kwargs = dict(net_arch=[256, 256, 256])
+            )
+        else: 
+            replay_buffer_class = None
+            replay_buffer_kwargs = None
+        
+        is_her = algo.lower() == "sacher"
+
+        current_tau = 0.05 if is_her else 0.005
+        current_train_freq = 64 if is_her else 1
+        current_gradient_steps = 64 if is_her else 1
 
         model = SAC(
             "MultiInputPolicy",
             env,
             learning_rate=1e-3,                         # Learning rate for networks
-            batch_size=2048,                            # Replay buffer batch size
+            batch_size=256,                             # Replay buffer batch size
             gamma=0.95,                                 # Discount factor for rewards
-            tau=0.05,                                   # Target network update rate
-            train_freq=64,                              # Optimization interval steps
-            gradient_steps=64,                          # Gradient steps per update
+            tau=current_tau,                            # Target network update rate  --- Higher for HER to stabilize learning with sparse rewards
+            train_freq=current_train_freq,              # Optimization interval steps --- Higher for HER to allow more experience collection before updates
+            gradient_steps=current_gradient_steps,      # Gradient steps per update   --- Higher for HER to perform more learning from each batch of sparse experiences
             learning_starts=10_000,                     # Steps before training starts
+            buffer_size=1_000_000,                      # Maximum replay buffer size
             replay_buffer_class=replay_buffer_class,    # Buffer class chosen for HER
             replay_buffer_kwargs=replay_buffer_kwargs,  # HER specific arguments
             policy_kwargs=policy_kwargs,                # Network layout parameters
@@ -142,12 +159,14 @@ def main() -> None:
         # Normalize evaluation observations while keeping test metrics unscaled
         eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, clip_obs=10.0, training=False)
     else:
+        reward_type = "sparse" if algo.lower() == "sacher" else "dense"
         # Set up an unnormalized environment pipeline for SAC verification
         eval_env = make_vec_env(
             "PandaPush-v3",
-            env_kwargs={"reward_type": "sparse"},
+            env_kwargs={"reward_type": reward_type},
             wrapper_class=lambda e: RandomizationWrapper(e, env_type=env_type, mode=strategy)
-    )
+        )
+    
 
     # Set up periodic callback evaluation to save checkpoints automatically
     eval_callback = EvalCallback(

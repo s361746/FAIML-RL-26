@@ -9,7 +9,7 @@ class RandomizationWrapper(gym.Wrapper):
     SUPPORTED_MODES = {"none", "udr", "adr"}
     
     DOMAIN_MASS_RANGES = {
-        "source": (1.0, 9.0),
+        "source": (0.5, 8.0),
         "target": (5.0, 5.0),
     }
 
@@ -61,7 +61,7 @@ class RandomizationWrapper(gym.Wrapper):
     def _sample_mass(self):
         if self.mode == "none":
             self.last_sample_type = "fixed"
-            return float(self.mass_min_limit)
+            return 1 if self.env_type == "source" else float(self.mass_min_limit)
 
         if self.mode == "udr":
             self.last_sample_type = "uniform"

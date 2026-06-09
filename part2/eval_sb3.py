@@ -54,11 +54,12 @@ def main() -> None:
     if not os.path.exists(model_path): 
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
+    is_sparse = "her" in os.path.basename(model_path).lower()
     is_ppo = "ppo" in os.path.basename(model_path).lower()
     render_mode = "human" if render else "rgb_array"
         
-    # Select dense rewards for PPO or sparse rewards for SAC
-    reward_type = "dense" if is_ppo else "sparse"
+    # Select dense rewards for PPO and SAC or sparse rewards for SAC+HER
+    reward_type = "sparse" if is_sparse else "dense"
 
     # -------------------------------------------------------------------------
     # 1. Setup
