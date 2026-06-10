@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         choices=["source", "target"],
         help="Type of environment variant to evaluate on",
     )
+    parser.add_argument(
+        "--seed", 
+        type=int, 
+        default=42, 
+        help="Random seed for reproducibility",
+    )
     return parser.parse_args()
 
 
@@ -66,6 +72,7 @@ def main() -> None:
     # -------------------------------------------------------------------------   
     env = make_vec_env(
         "PandaPush-v3",
+        seed=args.seed,
         env_kwargs={"render_mode": render_mode, "reward_type": reward_type},
         wrapper_class=lambda e: RandomizationWrapper(e, env_type=env_type, mode="none")
     )
