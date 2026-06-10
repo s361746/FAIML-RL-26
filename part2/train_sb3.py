@@ -111,7 +111,7 @@ def main() -> None:
             wrapper_class=lambda e: RandomizationWrapper(e, env_type=env_type, mode=strategy)
         )
         
-        policy_kwargs = dict(net_arch=[256, 256, 256])
+        policy_kwargs = dict(net_arch=[256, 256])
 
         if algo.lower() == "sacher": 
             # Configure HER memory settings
